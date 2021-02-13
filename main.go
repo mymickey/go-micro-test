@@ -36,7 +36,6 @@ func main() {
 			InsecureSkipVerify:true,
 		}
 	})
-	//reg := rEtcd.NewRegistry(rEtcd.Auth("root","12345"))
 	log.Printf("NewRegistry done ")
 	service := micro.NewService(
 		micro.Name("helloworld"),
