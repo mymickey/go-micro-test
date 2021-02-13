@@ -18,7 +18,7 @@ RUN cd /tmp/building CP && \
 FROM golang:1.13-alpine
 
 COPY  --from=builder /app ./
-
+COPY ./cert ./cert
 
 
 WORKDIR ./
