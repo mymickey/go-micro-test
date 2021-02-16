@@ -5,7 +5,7 @@ RUN mkdir /tmp/app
 COPY . /tmp/app/
 WORKDIR /tmp/app/
 
-#RUN cd /tmp/app && \
+RUN echo $GOPROXY
 RUN go mod vendor
 
 RUN mkdir /tmp/building
@@ -23,4 +23,4 @@ COPY ./cert ./cert
 
 WORKDIR ./
 
-CMD [ "./app", "--server_address", "0.0.0.0:8080"]
+CMD [ "./app"]

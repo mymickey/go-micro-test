@@ -5,9 +5,12 @@ import (
 	"crypto/tls"
 	"github.com/micro/go-micro"
 	"github.com/micro/go-micro/registry"
+	"github.com/micro/go-micro/web"
 	rEtcd "github.com/micro/go-micro/registry/etcd"
 	pb "github.com/mymickey/go-micro-test/proto"
+	"github.com/mymickey/go-micro-test/routes"
 	"log"
+
 	//"github.com/micro/cli"
 )
 
@@ -36,7 +39,13 @@ func main() {
 			InsecureSkipVerify:true,
 		}
 	})
+	hd := new(Greeter)
 	log.Printf("NewRegistry done ")
+	webServer := web.NewService(
+		web.Name("helloworld"),
+		web.Address(":8080"),
+		web.Handler(routes.InitRouters(hd)),
+		)
 	service := micro.NewService(
 		micro.Name("helloworld"),
 		micro.Registry(reg),
@@ -49,8 +58,9 @@ func main() {
 		})
 	})
 	log.Printf("server init done")
-	pb.RegisterGreeterHandler(service.Server(), new(Greeter))
+	pb.RegisterGreeterHandler(service.Server(), hd)
 	log.Printf("server registry done")
+	go webServer.Run()
 	if err := service.Run(); err != nil {
 		log.Fatal(err)
 	}
