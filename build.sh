@@ -1,2 +1,2 @@
 #!/bin/bash
-docker build -t go-micro-test:v0.0.10 ./
+docker build -t go-micro-test:v0.0.12 ./
