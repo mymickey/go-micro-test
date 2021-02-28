@@ -135,10 +135,84 @@ local function request(request_uri, basic_auth, method, path, query, body)
 end
 
 local function parse_micro_instance(item)
-    local ip = item.TaggedAddresses.lan_ipv4.Address
-    local port = item.TaggedAddresses.lan_ipv4.Port
-    local server_name = item.Service
+    local ip = item.ServiceTaggedAddresses.lan_ipv4.Address
+    local port = item.ServiceTaggedAddresses.lan_ipv4.Port
+    local server_name = item.ServiceName
     return ip, port, server_name
+end
+
+local function get_all_service_names(request_uri,basic_auth)
+    local svc = core.table.new(1, 0)
+    local res, err = request(request_uri, basic_auth, "GET", "v1/catalog/services")
+    if not res then
+        log.error("failed to fetch catalog", err)
+        return
+    end
+    if not res.body or res.status ~= 200 then
+        log.error("failed to fetch catalog, status = ", res.status)
+        return
+    end
+    local json_str = res.body
+    local data, err = core.json.decode(json_str)
+    if not data then
+        log.error("invalid get svc name response body: ", json_str, " err: ", err)
+        return
+    end
+    local apps = data
+    local up_apps = core.table.new(0, #apps)
+    
+    log.error("resp data get all svc names: ",json_str )
+    for server_name, _ in pairs(apps) do
+        local is_web = string_find(server_name, ".web", 1, true)
+        if is_web then
+            core.table.insert(svc,server_name)
+        end
+    end
+    return svc
+end
+
+local function get_service_detail(request_uri,basic_auth,names)
+    local up_apps = core.table.new(0, 1)
+    for _, svc_name in pairs(names) do
+        log.warn("get_service_detail name ", svc_name)
+        local svc_path = "v1/catalog/service/" .. svc_name
+        log.warn("get_service_detail path ",svc_path)
+        local res, err = request(request_uri, basic_auth, "GET", svc_path)
+        if not res then
+            log.error("failed to fetch svc detail", err)
+            return
+        end
+        if not res.body or res.status ~= 200 then
+            log.error("failed to fetch svc detail, status = ", res.status)
+            return
+        end
+        local json_str = res.body
+        local data, err = core.json.decode(json_str)
+        if not data then
+            log.error("invalid svc detail response body: ", json_str, " err: ", err)
+            return
+        end
+        local apps = data
+
+        log.error("resp data: ",json_str )
+        for _, app in pairs(apps) do
+            local ip, port, server_name = parse_micro_instance(app)
+            log.warn("get service ",server_name, " ip ",ip ," port ",port)
+            if ip and port and server_name then
+                local nodes = up_apps[server_name]
+                if not nodes then
+                    nodes = core.table.new(1, 0)
+                    up_apps[server_name] = nodes
+                end
+                core.table.insert(nodes, {
+                    host = ip,
+                    port = port,
+                    weight = default_weight,
+                })
+            end
+        end
+    end
+    return up_apps
 end
 
 local function fetch_full_registry(premature)
@@ -151,44 +225,9 @@ local function fetch_full_registry(premature)
         return
     end
 
-    local res, err = request(request_uri, basic_auth, "GET", "v1/agent/services")
-    if not res then
-        log.error("failed to fetch registry", err)
-        return
-    end
-
-    if not res.body or res.status ~= 200 then
-        log.error("failed to fetch registry, status = ", res.status)
-        return
-    end
-
-    local json_str = res.body
-    local data, err = core.json.decode(json_str)
-    if not data then
-        log.error("invalid response body: ", json_str, " err: ", err)
-        return
-    end
-
-    local apps = data
-    local up_apps = core.table.new(0, #apps)
-    log.error("resp data: ",json_str )
-    for _, app in pairs(apps) do
-        local ip, port, server_name = parse_micro_instance(app)
-        local is_web = string_find(server_name, ".web", 1, true)
-        log.warn("get service ",server_name, " is_web ",is_web, " ip ",ip ," port ",port)
-        if is_web and ip and port and server_name then
-            local nodes = up_apps[server_name]
-            if not nodes then
-                nodes = core.table.new(1, 0)
-                up_apps[server_name] = nodes
-            end
-            core.table.insert(nodes, {
-                host = ip,
-                port = port,
-                weight = default_weight,
-            })
-        end
-    end
+    local names = get_all_service_names(request_uri,basic_auth)
+    local up_apps = get_service_detail(request_uri,basic_auth,names)
+    
     applications = up_apps
     log.warn("update services: ", core.json.encode(applications))
 end
